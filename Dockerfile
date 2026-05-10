@@ -8,7 +8,7 @@
 # docs/architecture/13_DEPLOYMENT_PLAN.md.
 
 # ---------- Build stage --------------------------------------------------
-FROM python:3.12-slim AS build
+FROM python:3.14-slim AS build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -29,7 +29,7 @@ RUN uv sync --no-dev --frozen --no-install-project
 RUN uv pip install --no-cache --no-deps -e .
 
 # ---------- Runtime stage ------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
