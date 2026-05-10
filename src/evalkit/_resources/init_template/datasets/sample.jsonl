@@ -1,0 +1,2 @@
+{"case_id": "greet-001", "tags": ["smoke"], "input": {"messages": [{"role": "user", "content": "hello"}]}, "expected": {"text": "hello", "must_contain": ["hello"]}, "metadata": {}}
+{"case_id": "greet-002", "tags": ["smoke"], "input": {"messages": [{"role": "user", "content": "ping"}]}, "expected": {"text": "ping", "must_contain": ["ping"]}, "metadata": {}}

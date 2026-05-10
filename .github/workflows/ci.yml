@@ -145,3 +145,14 @@ jobs:
         run: |
           /tmp/freshvenv/bin/evalkit --version
           /tmp/freshvenv/bin/evalkit --help
+
+      - name: End-to-end run (mock provider)
+        # Drives the full Phase 1 flow against the wheel-installed CLI: scaffold a
+        # starter project, execute the suite, list the resulting run, and dump it.
+        run: |
+          /tmp/freshvenv/bin/evalkit init /tmp/demo
+          /tmp/freshvenv/bin/evalkit run /tmp/demo/suite.yaml --db /tmp/demo/evalkit.db
+          /tmp/freshvenv/bin/evalkit list runs --db /tmp/demo/evalkit.db
+          RUN_ID=$(/tmp/freshvenv/bin/evalkit list runs --db /tmp/demo/evalkit.db --limit 1 \
+            | awk '{print $1}')
+          /tmp/freshvenv/bin/evalkit show "$RUN_ID" --db /tmp/demo/evalkit.db
