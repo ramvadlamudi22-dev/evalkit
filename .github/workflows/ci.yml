@@ -135,9 +135,11 @@ jobs:
           ls -la dist/
 
       - name: Install wheel into a fresh venv
+        # `uv venv` does not seed pip by default; we use `uv pip install --python ...`
+        # to install the wheel into the freshly created venv without needing pip inside it.
         run: |
           uv venv /tmp/freshvenv
-          /tmp/freshvenv/bin/pip install dist/*.whl
+          uv pip install --python /tmp/freshvenv/bin/python dist/*.whl
 
       - name: Smoke test installed CLI
         run: |
