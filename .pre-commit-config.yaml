@@ -1,0 +1,35 @@
+# Pre-commit hooks. Install with: `make install` (which runs `pre-commit install`).
+# Run on demand: `pre-commit run --all-files`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # Mypy runs in the project venv so it sees the same dependencies as `make ci`.
+  # This avoids drift between pre-commit's isolated env and the real CI environment.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (project venv)
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true

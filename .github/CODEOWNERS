@@ -1,0 +1,8 @@
+# Default owner for everything in the repo.
+*                              @ramvadlamudi22-dev
+
+# Areas that warrant a re-read pass before merging, even from the owner.
+/src/evalkit/storage/          @ramvadlamudi22-dev
+/src/evalkit/runner/           @ramvadlamudi22-dev
+/.github/                      @ramvadlamudi22-dev
+/docs/architecture/            @ramvadlamudi22-dev

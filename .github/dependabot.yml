@@ -1,0 +1,54 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+    open-pull-requests-limit: 5
+    labels:
+      - "kind:chore"
+      - "area:deps"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      runtime-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+          - "pip-audit"
+      dev-deps:
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+          - "pip-audit"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "kind:chore"
+      - "area:ci"
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "kind:chore"
+      - "area:docker"
+    commit-message:
+      prefix: "chore(docker)"
