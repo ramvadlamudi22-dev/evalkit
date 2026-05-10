@@ -24,29 +24,32 @@ Verified by an integration test that runs `make demo` in CI.
 
 ## Docker
 
-Single Dockerfile, multi-stage:
+Single Dockerfile, multi-stage. Phases 0–5 use `python:3.12-slim` for the runtime stage; distroless migration is gated to Phase 6 (release hardening). Rationale: stable distroless `python3-debian12` ships Python 3.11, not 3.12, which would create a version drift between local development (3.12) and the runtime container. Chainguard distroless 3.12 is a candidate at Phase 6. See [ADR-0002](../adr/0002-runtime-image-uses-python-3.12-slim-not-distroless.md).
 
 ```
 # build stage
 FROM python:3.12-slim AS build
-RUN pip install uv
-COPY . /app
-WORKDIR /app
-RUN uv sync --frozen --no-dev
-RUN uv build
+RUN pip install --no-cache-dir "uv==<pinned>"
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN uv sync --no-dev --no-install-project
+RUN uv pip install --no-cache --no-deps -e .
 
-# runtime stage
-FROM gcr.io/distroless/python3-debian12:nonroot
-COPY --from=build /app/.venv /venv
-COPY --from=build /app/src/evalkit /app/evalkit
-ENV PATH="/venv/bin:$PATH" PYTHONPATH="/app"
-USER nonroot
-ENTRYPOINT ["python", "-m", "evalkit"]
+# runtime stage (Phase 0-5)
+FROM python:3.12-slim AS runtime
+RUN groupadd --system --gid 10001 evalkit \
+ && useradd  --system --uid 10001 --gid evalkit --no-create-home --shell /usr/sbin/nologin evalkit
+COPY --from=build /app/.venv /app/.venv
+COPY --from=build /app/src   /app/src
+ENV PATH="/app/.venv/bin:${PATH}"
+USER evalkit
+ENTRYPOINT ["evalkit"]
+CMD ["--help"]
 ```
 
 Image budget:
-- Compressed: <80 MB.
-- Verified by `docker images` in the release workflow; if the image grows >10% between releases without cause, the release is held.
+- Compressed: <80 MB target. Phase 0 image is ~50–60 MB compressed (verified at PR time; current value lives in CI logs and is asserted in Phase 6 once we have a baseline file).
+- Verified by `docker image inspect` in the CI `docker` job; the release workflow holds the release if the image grows >10% between releases without cause.
 
 ## docker-compose for the optional dashboard (Phase 8)
 
