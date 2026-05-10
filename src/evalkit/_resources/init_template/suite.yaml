@@ -1,0 +1,20 @@
+version: 1
+name: starter
+description: Starter suite scaffolded by `evalkit init`. Uses the deterministic mock provider.
+
+dataset: datasets/sample.jsonl
+
+models:
+  - id: mock-baseline
+    provider: mock
+    params: {}
+
+evaluators:
+  - name: exact_match
+    strip: true
+    case_insensitive: true
+  - name: contains
+
+run:
+  concurrency: 1
+  per_call_timeout_seconds: 5
