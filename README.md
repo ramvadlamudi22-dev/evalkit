@@ -9,19 +9,26 @@ EvalKit is a command-line tool for evaluating LLM outputs. Suites are declarativ
 
 ## Status
 
-**Phase 0 — repo skeleton.** Tooling, CI, and a `--version` command. The CLI does not yet evaluate anything; that lands in Phase 1.
+**Phase 1 — core evaluation flow with a deterministic mock provider.** Runs are persisted in SQLite, the CLI returns standardized exit codes (0 / 1 / 2), and a starter project ships with the package.
 
-The [phased roadmap](docs/architecture/21_PHASED_ROADMAP.md) shows what ships when. The full design docset lives in [`docs/architecture/`](docs/architecture/).
+The [phased roadmap](docs/architecture/21_PHASED_ROADMAP.md) shows what lands when. Phase 2 introduces the first real provider and an async runner. The full design docset lives in [`docs/architecture/`](docs/architecture/).
 
-## Quickstart (Phase 0)
+## Quickstart
 
 ```bash
 git clone https://github.com/ramvadlamudi22-dev/evalkit.git
 cd evalkit
-make install
-make ci
-evalkit --version
+make install              # uv sync + pre-commit install
+make ci                   # ruff + mypy + pytest
+
+# scaffold and run a suite end-to-end (mock provider; no API keys required)
+uv run evalkit init demo
+uv run evalkit run demo/suite.yaml --db demo/evalkit.db
+uv run evalkit list runs --db demo/evalkit.db
+uv run evalkit show <RUN_ID> --db demo/evalkit.db
 ```
+
+`evalkit run` exits **0** when every case passes every evaluator, **1** when at least one case fails, **2** on infrastructure errors (per the [CLI contract](docs/architecture/06_CLI_API_CONTRACT.md)).
 
 ## Documentation
 
