@@ -1,0 +1,56 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python build artifacts
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov
+coverage.xml
+.hypothesis
+
+# Virtual envs
+.venv
+venv
+env
+
+# IDEs
+.idea
+.vscode
+*.swp
+
+# Local
+.env
+.env.local
+*.db
+*.sqlite
+
+# Docs (don't ship docs in image)
+docs
+
+# CI
+.github
+
+# Tests (we don't ship tests in image)
+tests
+
+# Misc
+*.log
+*.md
+!README.md
+CHANGELOG.md
+SECURITY.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+Makefile
+.pre-commit-config.yaml
+.editorconfig
+.dockerignore
+# .python-version intentionally NOT excluded; uv may use it.
