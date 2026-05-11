@@ -10,12 +10,18 @@ Phase 1 additions:
     evalkit list runs          List recent runs.
     evalkit show RUN_ID        Render one run.
 
-The remaining subcommands (compare, baseline, report, doctor) land in
-subsequent phases per docs/architecture/21_PHASED_ROADMAP.md.
+Phase 2 additions:
+    evalkit baseline set RUN_ID [--name NAME]
+    evalkit baseline get [--name NAME]
+    evalkit compare RUN_A RUN_B [--threshold P]
+
+The remaining subcommands (report, doctor) land in subsequent phases per
+docs/architecture/21_PHASED_ROADMAP.md.
 """
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from importlib import resources
 from pathlib import Path
@@ -26,6 +32,7 @@ import typer
 from evalkit import __version__
 from evalkit.errors import EvalKitError, UsageError
 from evalkit.loaders import load_dataset, load_suite
+from evalkit.logging import configure_logging
 from evalkit.runner import run_suite
 from evalkit.storage import db_path_from_env, engine_for, ensure_schema, session_factory_for
 from evalkit.storage.repo import Repo
@@ -38,6 +45,13 @@ app = typer.Typer(
 )
 list_app = typer.Typer(name="list", help="List EvalKit resources.", no_args_is_help=True)
 app.add_typer(list_app, name="list")
+baseline_app = typer.Typer(
+    name="baseline", help="Manage named baseline runs.", no_args_is_help=True
+)
+app.add_typer(baseline_app, name="baseline")
+
+
+DEFAULT_BASELINE = "default"
 
 
 def _version_callback(value: bool) -> None:
@@ -137,12 +151,15 @@ def cmd_run(
         raise UsageError(f"dataset not found: {dataset_path}")
     dataset = load_dataset(dataset_path)
 
-    outcome = run_suite(
-        suite=suite,
-        suite_yaml_text=yaml_text,
-        suite_path=suite_path,
-        dataset=dataset,
-        repo=repo,
+    configure_logging()
+    outcome = asyncio.run(
+        run_suite(
+            suite=suite,
+            suite_yaml_text=yaml_text,
+            suite_path=suite_path,
+            dataset=dataset,
+            repo=repo,
+        )
     )
     typer.echo(
         f"run_id={outcome.run_id} cases={outcome.case_count} "
@@ -227,6 +244,89 @@ def cmd_show(
                 f"        - {ev.evaluator_name}/{ev.evaluator_version}  "
                 f"score={ev.score:.2f}  passed={ev.passed}"
             )
+
+
+# ----- baseline ----------------------------------------------------------
+
+
+@baseline_app.command("set")
+def cmd_baseline_set(
+    run_id: Annotated[str, typer.Argument(help="Run ID (ULID) to tag as baseline.")],
+    name: Annotated[str, typer.Option("--name", help="Baseline label.")] = DEFAULT_BASELINE,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+) -> None:
+    """Point a baseline label at a run id."""
+    repo = _open_repo(db)
+    if repo.get_run(run_id) is None:
+        typer.echo(f"run not found: {run_id}", err=True)
+        raise typer.Exit(code=64)
+    repo.set_baseline(label=name, run_id=run_id)
+    typer.echo(f"baseline {name!r} -> {run_id}")
+
+
+@baseline_app.command("get")
+def cmd_baseline_get(
+    name: Annotated[str, typer.Option("--name", help="Baseline label.")] = DEFAULT_BASELINE,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+) -> None:
+    """Print the run currently tagged as baseline ``name``."""
+    repo = _open_repo(db)
+    run = repo.get_baseline(name)
+    if run is None:
+        typer.echo(f"no baseline set for label {name!r}", err=True)
+        raise typer.Exit(code=64)
+    started = run.started_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    pass_rate = (run.pass_count / run.case_count) if run.case_count else 0.0
+    typer.echo(
+        f"baseline={name} run_id={run.id} status={run.status} "
+        f"started={started} cases={run.case_count} passed={run.pass_count} "
+        f"failed={run.fail_count} errored={run.error_count} "
+        f"pass_rate={pass_rate:.3f}"
+    )
+
+
+# ----- compare -----------------------------------------------------------
+
+
+@app.command("compare")
+def cmd_compare(
+    run_a: Annotated[str, typer.Argument(help="Baseline run ID (or label via --baseline).")],
+    run_b: Annotated[str, typer.Argument(help="Candidate run ID.")],
+    threshold: Annotated[
+        float,
+        typer.Option(
+            "--threshold",
+            min=0.0,
+            max=1.0,
+            help="Maximum allowed pass-rate drop (fraction). Default 0 = no regression.",
+        ),
+    ] = 0.0,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+) -> None:
+    """Compare two runs; exit 1 if the pass-rate drop exceeds threshold."""
+    repo = _open_repo(db)
+    baseline = repo.get_run(run_a)
+    candidate = repo.get_run(run_b)
+    if baseline is None:
+        typer.echo(f"run not found: {run_a}", err=True)
+        raise typer.Exit(code=64)
+    if candidate is None:
+        typer.echo(f"run not found: {run_b}", err=True)
+        raise typer.Exit(code=64)
+
+    def _pass_rate(case_count: int, pass_count: int) -> float:
+        return (pass_count / case_count) if case_count else 0.0
+
+    base_rate = _pass_rate(baseline.case_count, baseline.pass_count)
+    cand_rate = _pass_rate(candidate.case_count, candidate.pass_count)
+    delta = cand_rate - base_rate
+    regression = -delta > threshold
+
+    typer.echo(f"baseline  : {baseline.id}  pass_rate={base_rate:.3f}")
+    typer.echo(f"candidate : {candidate.id}  pass_rate={cand_rate:.3f}")
+    typer.echo(f"delta     : {delta:+.3f} (threshold drop allowed: {threshold:.3f})")
+    typer.echo("verdict   : REGRESSION" if regression else "verdict   : OK")
+    raise typer.Exit(code=1 if regression else 0)
 
 
 # ----- shared -----------------------------------------------------------

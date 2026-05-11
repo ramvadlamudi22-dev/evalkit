@@ -65,15 +65,39 @@ class ProviderError(InfraError):
 
 
 class TransientProviderError(ProviderError):
-    """Retryable transient failure (network blip, 5xx, timeout)."""
+    """Retryable transient failure (network blip, 5xx)."""
 
     code = "provider.transient"
+
+
+class TimeoutProviderError(TransientProviderError):
+    """Provider call exceeded its per-call deadline."""
+
+    code = "provider.timeout"
+
+
+class RateLimitProviderError(TransientProviderError):
+    """Provider rejected the call with a rate-limit signal."""
+
+    code = "provider.rate_limit"
 
 
 class PermanentProviderError(ProviderError):
     """Non-retryable failure (bad input, auth, 4xx)."""
 
     code = "provider.permanent"
+
+
+class AuthProviderError(PermanentProviderError):
+    """Authentication failed; no retry will help."""
+
+    code = "provider.auth"
+
+
+class ProviderConfigError(PermanentProviderError):
+    """Caller-supplied provider configuration is invalid."""
+
+    code = "provider.config"
 
 
 # ---------- Internal errors (bug; CLI exit 70) ----------------------------

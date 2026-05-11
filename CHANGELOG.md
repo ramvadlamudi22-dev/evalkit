@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added (Phase 2)
+
+- Real provider adapter `LiteLLMProvider` that wraps `litellm.acompletion`, classifies
+  errors against the EvalKit taxonomy (auth/rate-limit/timeout/transient/permanent),
+  and orchestrates retries via tenacity (`AsyncRetrying` with exponential backoff
+  and full jitter) only on transient subclasses.
+- Per-call deadlines via `asyncio.wait_for(...)` — wall-clock timeout becomes
+  `TimeoutProviderError` (transient -> retryable).
+- New error leaves: `TimeoutProviderError`, `RateLimitProviderError`,
+  `AuthProviderError`, `ProviderConfigError` (codes: `provider.timeout`,
+  `provider.rate_limit`, `provider.auth`, `provider.config`).
+- Structured logging via structlog: JSON renderer by default, `text` for interactive
+  shells (`EVALKIT_LOG_FORMAT`, `EVALKIT_LOG_LEVEL`). One-shot `configure_logging()`.
+- `Provider.complete` is now `async`; `MockProvider` and the runner both adopt the
+  async surface (ADR-0003's agreed migration point).
+- Bounded concurrency runner: `run_suite` is a coroutine that fans cases out to
+  `asyncio.Tasks` serialised through `asyncio.Semaphore(suite.run.concurrency)`.
+- Baseline + regression CLI surface: `evalkit baseline set <run-id> [--name LABEL]`,
+  `evalkit baseline get [--name LABEL]`, `evalkit compare <run-a> <run-b>
+  [--threshold P]`. `compare` exits 1 if the pass-rate drop exceeds threshold.
+- Run metadata: every run row now also records `git_sha` (from `$GITHUB_SHA` / `git
+  rev-parse HEAD`) and `ci_provider` (sentinel-env detection).
+- ADR-0004 (LiteLLM as the provider seam) and ADR-0005 (retry policy).
+
+### Added (Phase 1)
 
 - Phase 1 core: Pydantic v2 domain models (`Suite`, `Dataset`, `DatasetItem`, `RunRecord`,
   `EvaluationRecord`, etc.), `Provider`/`Evaluator` protocols, ULID identifiers, and an

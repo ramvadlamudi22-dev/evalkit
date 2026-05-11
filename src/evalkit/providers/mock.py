@@ -16,8 +16,8 @@ message verbatim — handy for sanity-checking the runner without any fixtures.
 
 from __future__ import annotations
 
+import asyncio
 import json
-import time
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +41,7 @@ class MockProvider:
             self._load_fixture(Path(responses_path))
         self._latency_ms = latency_ms
 
-    def complete(self, request: ProviderRequest, *, timeout_s: float) -> ProviderResponse:
+    async def complete(self, request: ProviderRequest, *, timeout_s: float) -> ProviderResponse:
         # Dispatch keyed by (case_id, model_id). The runner sets
         # `params["_case_id"]` so the mock can route requests deterministically;
         # the underscore prefix marks the field as runner-internal.
@@ -53,7 +53,7 @@ class MockProvider:
             # Fall back to echoing the last user message; this is what makes the
             # mock "just work" without fixtures.
             text = _last_user_message(request)
-        time.sleep(self._latency_ms / 1000.0)
+        await asyncio.sleep(self._latency_ms / 1000.0)
         return ProviderResponse(
             text=text,
             raw={"mock": True},

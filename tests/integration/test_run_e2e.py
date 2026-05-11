@@ -33,7 +33,7 @@ DATASET = (
 
 
 @pytest.mark.integration
-def test_full_passing_run_persists_results(tmp_path: Path) -> None:
+async def test_full_passing_run_persists_results(tmp_path: Path) -> None:
     suite_path = tmp_path / "suite.yaml"
     suite_path.write_text(SUITE, encoding="utf-8")
     dataset_path = tmp_path / "data.jsonl"
@@ -46,7 +46,7 @@ def test_full_passing_run_persists_results(tmp_path: Path) -> None:
     ensure_schema(engine)
     repo = Repo(session_factory_for(engine))
 
-    outcome = run_suite(
+    outcome = await run_suite(
         suite=suite,
         suite_yaml_text=raw,
         suite_path=suite_path,
