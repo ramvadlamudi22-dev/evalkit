@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
+import subprocess
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -44,6 +46,7 @@ from evalkit.storage.models import (
 from evalkit.storage.models import (
     Suite as SuiteRow,
 )
+from evalkit.storage.models import Baseline as BaselineRow
 
 
 class Repo:
@@ -110,6 +113,8 @@ class Repo:
                     evalkit_version=evalkit_version,
                     python_version=f"{sys.version_info.major}.{sys.version_info.minor}",
                     host_os=platform.system(),
+                    git_sha=_best_effort_git_sha(),
+                    ci_provider=_detect_ci_provider(),
                 )
             )
         return run_id
@@ -247,6 +252,45 @@ class Repo:
 
     # ----- internal -----------------------------------------------------
 
+    # ----- baselines ----------------------------------------------------
+
+    def set_baseline(self, *, label: str, run_id: str, set_by: str | None = None) -> None:
+        """Point ``label`` at ``run_id``. Overwrites any prior label binding."""
+        with session_scope(self._factory) as session:
+            if session.get(RunRow, run_id) is None:
+                raise StorageError(f"run {run_id} not found")
+            existing = session.get(BaselineRow, label)
+            if existing is None:
+                session.add(
+                    BaselineRow(
+                        label=label,
+                        run_id=run_id,
+                        set_at=datetime.now(tz=UTC),
+                        set_by=set_by,
+                    )
+                )
+            else:
+                existing.run_id = run_id
+                existing.set_at = datetime.now(tz=UTC)
+                existing.set_by = set_by
+
+    def get_baseline(self, label: str) -> RunRecord | None:
+        """Return the run currently tagged as ``label``, or None."""
+        with session_scope(self._factory) as session:
+            row = session.get(BaselineRow, label)
+            if row is None:
+                return None
+            run = session.get(RunRow, row.run_id)
+            if run is None:
+                return None
+            return self._project_run(session, run)
+
+    def list_baselines(self) -> list[tuple[str, str]]:
+        """Return ``[(label, run_id), ...]`` sorted by label."""
+        with session_scope(self._factory) as session:
+            rows = session.scalars(select(BaselineRow).order_by(BaselineRow.label)).all()
+            return [(r.label, r.run_id) for r in rows]
+
     @staticmethod
     def _project_run(session: Session, row: RunRow) -> RunRecord:
         suite = session.get(SuiteRow, row.suite_id)
@@ -290,6 +334,50 @@ class Repo:
 def _aware(dt: datetime) -> datetime:
     """SQLite stores naive datetimes; tag them as UTC on the way out."""
     return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
+_CI_ENV_VARS = (
+    ("github_actions", "GITHUB_ACTIONS"),
+    ("gitlab_ci", "GITLAB_CI"),
+    ("circleci", "CIRCLECI"),
+    ("buildkite", "BUILDKITE"),
+    ("travis", "TRAVIS"),
+    ("jenkins", "JENKINS_URL"),
+    ("ci_generic", "CI"),
+)
+
+
+def _detect_ci_provider() -> str | None:
+    """Identify the CI provider (if any) from well-known env-var sentinels."""
+    for name, env_var in _CI_ENV_VARS:
+        if os.environ.get(env_var):
+            return name
+    return None
+
+
+def _best_effort_git_sha() -> str | None:
+    """Return the current commit SHA from $GITHUB_SHA or ``git rev-parse``.
+
+    Returns None outside a git checkout, when git is unavailable, or on any
+    other failure - we never let metadata collection break a run.
+    """
+    env_sha = os.environ.get("GITHUB_SHA") or os.environ.get("CI_COMMIT_SHA")
+    if env_sha:
+        return env_sha
+    try:
+        result = subprocess.run(  # noqa: S603 - argv is a literal list
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 - we trust $PATH for git
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
 
 
 def hash_file(path: Path) -> str:

@@ -50,12 +50,12 @@ def _item(case_id: str, *, content: str, expected: str) -> DatasetItem:
 
 
 @pytest.mark.unit
-def test_runner_persists_passing_run(repo: Repo, tmp_path: Path) -> None:
+async def test_runner_persists_passing_run(repo: Repo, tmp_path: Path) -> None:
     suite = _suite()
     dataset = _dataset([_item("c1", content="hi", expected="hi")])
     provider = MockProvider(responses={("c1", "m1"): "hi"}, latency_ms=0)
 
-    outcome = run_suite(
+    outcome = await run_suite(
         suite=suite,
         suite_yaml_text=SUITE_YAML,
         suite_path=tmp_path / "s.yaml",
@@ -69,7 +69,7 @@ def test_runner_persists_passing_run(repo: Repo, tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_runner_returns_exit_one_when_a_case_fails(repo: Repo, tmp_path: Path) -> None:
+async def test_runner_returns_exit_one_when_a_case_fails(repo: Repo, tmp_path: Path) -> None:
     suite = _suite()
     dataset = _dataset(
         [
@@ -79,7 +79,7 @@ def test_runner_returns_exit_one_when_a_case_fails(repo: Repo, tmp_path: Path) -
     )
     provider = MockProvider(latency_ms=0)  # default echo
 
-    outcome = run_suite(
+    outcome = await run_suite(
         suite=suite,
         suite_yaml_text=SUITE_YAML,
         suite_path=tmp_path / "s.yaml",
@@ -93,19 +93,19 @@ def test_runner_returns_exit_one_when_a_case_fails(repo: Repo, tmp_path: Path) -
 
 
 @pytest.mark.unit
-def test_runner_records_provider_error_as_exit_two(repo: Repo, tmp_path: Path) -> None:
+async def test_runner_records_provider_error_as_exit_two(repo: Repo, tmp_path: Path) -> None:
     suite = _suite()
     dataset = _dataset([_item("c1", content="hi", expected="hi")])
 
     class ExplodingProvider:
         name = "boom"
 
-        def complete(self, request, *, timeout_s):  # type: ignore[no-untyped-def]
+        async def complete(self, request, *, timeout_s):  # type: ignore[no-untyped-def]
             from evalkit.errors import TransientProviderError
 
             raise TransientProviderError("upstream gone")
 
-    outcome = run_suite(
+    outcome = await run_suite(
         suite=suite,
         suite_yaml_text=SUITE_YAML,
         suite_path=tmp_path / "s.yaml",

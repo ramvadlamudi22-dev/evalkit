@@ -1,4 +1,4 @@
-"""Synchronous run executor.
+"""Async run executor.
 
 Walks the suite x dataset x evaluators matrix, calling the provider for each
 case and the evaluators for each response, and persists everything via `Repo`.
@@ -9,10 +9,16 @@ Exit-code semantics match docs/architecture/06_CLI_API_CONTRACT.md:
     2 — at least one case errored at the provider/storage layer
 
 The runner does not call `sys.exit`; the CLI translates `RunOutcome.exit_code`.
+
+Concurrency is bounded by ``suite.run.concurrency`` via an ``asyncio.Semaphore``.
+Results are persisted in completion order; the runner returns when every case
+has reached a terminal state. SQLite is single-writer, but the Repo facade
+opens short sessions so concurrent ``record_case`` calls serialise quickly.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +34,7 @@ from evalkit.core.models import (
 from evalkit.core.protocols import Evaluator, Provider
 from evalkit.errors import ProviderError
 from evalkit.evaluators import get_evaluator
+from evalkit.logging import get_logger
 from evalkit.providers import get_provider
 from evalkit.storage.repo import Repo
 
@@ -44,7 +51,7 @@ class RunOutcome:
     exit_code: int
 
 
-def run_suite(
+async def run_suite(
     *,
     suite: Suite,
     suite_yaml_text: str,
@@ -59,6 +66,7 @@ def run_suite(
     `MockProvider` with an inline mapping); production code constructs
     providers by name via the registry.
     """
+    log = get_logger("evalkit.runner", suite=suite.name)
     suite_id = repo.upsert_suite(suite, yaml_text=suite_yaml_text)
     dataset_id = repo.upsert_dataset(
         path=str(suite_path.parent / suite.dataset)
@@ -68,38 +76,41 @@ def run_suite(
         row_count=len(dataset.items),
     )
     run_id = repo.start_run(suite_id=suite_id, dataset_id=dataset_id)
+    log = log.bind(run_id=run_id)
 
     overrides = provider_overrides or {}
     providers = _build_providers(suite, overrides)
     evaluators = [_build_evaluator(spec.model_dump()) for spec in suite.evaluators]
 
-    pass_count = 0
-    fail_count = 0
-    error_count = 0
+    semaphore = asyncio.Semaphore(max(1, suite.run.concurrency))
+    tasks: list[asyncio.Task[str]] = []
     case_index = 0
-
     for item in dataset.items:
         for model in suite.models:
             provider = providers[model.id]
-            case_outcome = _run_case(
-                run_id=run_id,
-                case_index=case_index,
-                item=item,
-                model_id=model.id,
-                provider_name=model.provider,
-                provider=provider,
-                evaluators=evaluators,
-                params=model.params,
-                timeout_s=suite.run.per_call_timeout_seconds,
-                repo=repo,
+            tasks.append(
+                asyncio.create_task(
+                    _run_case_with_limit(
+                        semaphore=semaphore,
+                        run_id=run_id,
+                        case_index=case_index,
+                        item=item,
+                        model_id=model.id,
+                        provider_name=model.provider,
+                        provider=provider,
+                        evaluators=evaluators,
+                        params=model.params,
+                        timeout_s=suite.run.per_call_timeout_seconds,
+                        repo=repo,
+                    )
+                )
             )
             case_index += 1
-            if case_outcome == "ok":
-                pass_count += 1
-            elif case_outcome == "failed":
-                fail_count += 1
-            else:
-                error_count += 1
+    outcomes = await asyncio.gather(*tasks)
+
+    pass_count = sum(1 for o in outcomes if o == "ok")
+    fail_count = sum(1 for o in outcomes if o == "failed")
+    error_count = sum(1 for o in outcomes if o == "error")
 
     if error_count:
         status, exit_code = "error", 2
@@ -108,6 +119,14 @@ def run_suite(
     else:
         status, exit_code = "passed", 0
     repo.finish_run(run_id, status=status, exit_code=exit_code)
+    log.info(
+        "run.finished",
+        cases=case_index,
+        passed=pass_count,
+        failed=fail_count,
+        errored=error_count,
+        exit_code=exit_code,
+    )
 
     return RunOutcome(
         run_id=run_id,
@@ -137,7 +156,36 @@ def _build_evaluator(spec: dict[str, object]) -> Evaluator:
     return get_evaluator(name, **spec)
 
 
-def _run_case(
+async def _run_case_with_limit(
+    *,
+    semaphore: asyncio.Semaphore,
+    run_id: str,
+    case_index: int,
+    item: DatasetItem,
+    model_id: str,
+    provider_name: str,
+    provider: Provider,
+    evaluators: list[Evaluator],
+    params: dict[str, object],
+    timeout_s: float,
+    repo: Repo,
+) -> str:
+    async with semaphore:
+        return await _run_case(
+            run_id=run_id,
+            case_index=case_index,
+            item=item,
+            model_id=model_id,
+            provider_name=provider_name,
+            provider=provider,
+            evaluators=evaluators,
+            params=params,
+            timeout_s=timeout_s,
+            repo=repo,
+        )
+
+
+async def _run_case(
     *,
     run_id: str,
     case_index: int,
@@ -158,7 +206,7 @@ def _run_case(
     )
     started = time.perf_counter()
     try:
-        response = provider.complete(request, timeout_s=timeout_s)
+        response = await provider.complete(request, timeout_s=timeout_s)
     except ProviderError as exc:
         # Provider failure: record the case as errored and skip evaluators.
         repo.record_case(
