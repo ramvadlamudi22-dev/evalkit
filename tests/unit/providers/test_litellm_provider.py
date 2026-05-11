@@ -25,7 +25,6 @@ from evalkit.errors import (
 )
 from evalkit.providers.litellm_provider import LiteLLMProvider
 
-
 # ---------- helpers --------------------------------------------------------
 
 
@@ -91,12 +90,14 @@ def _scripted(*responses: Any) -> Callable[..., Awaitable[Any]]:
 
 
 def _make_litellm_exc(cls: type[Exception]) -> Exception:
-    """Construct a LiteLLM exception with the keyword args its __init__ wants."""
-    return cls(
-        message="boom",
-        model="gpt-4o-mini",
-        llm_provider="openai",
-    )
+    """Construct a LiteLLM exception with the keyword args its __init__ wants.
+
+    LiteLLM's exception subclasses re-declare ``__init__(message, model,
+    llm_provider, ...)`` but mypy resolves ``cls`` as ``type[Exception]``;
+    cast to a callable to keep the test concise without ``Any``.
+    """
+    factory: Callable[..., Exception] = cls
+    return factory(message="boom", model="gpt-4o-mini", llm_provider="openai")
 
 
 # ---------- happy path -----------------------------------------------------
@@ -148,17 +149,13 @@ class TestLiteLLMProviderClassification:
             await provider.complete(_request(), timeout_s=5.0)
 
     async def test_bad_request_becomes_permanent(self) -> None:
-        bad = litellm_exc.BadRequestError(
-            message="bad", model="gpt-4o-mini", llm_provider="openai"
-        )
+        bad = litellm_exc.BadRequestError(message="bad", model="gpt-4o-mini", llm_provider="openai")
         provider = LiteLLMProvider(acompletion=_scripted(bad))
         with pytest.raises(PermanentProviderError):
             await provider.complete(_request(), timeout_s=5.0)
 
     async def test_not_found_becomes_provider_config_error(self) -> None:
-        nf = litellm_exc.NotFoundError(
-            message="missing", model="nope", llm_provider="openai"
-        )
+        nf = litellm_exc.NotFoundError(message="missing", model="nope", llm_provider="openai")
         provider = LiteLLMProvider(acompletion=_scripted(nf))
         with pytest.raises(ProviderConfigError):
             await provider.complete(_request(), timeout_s=5.0)

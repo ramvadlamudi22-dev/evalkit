@@ -252,9 +252,7 @@ def cmd_show(
 @baseline_app.command("set")
 def cmd_baseline_set(
     run_id: Annotated[str, typer.Argument(help="Run ID (ULID) to tag as baseline.")],
-    name: Annotated[
-        str, typer.Option("--name", help="Baseline label.")
-    ] = DEFAULT_BASELINE,
+    name: Annotated[str, typer.Option("--name", help="Baseline label.")] = DEFAULT_BASELINE,
     db: Annotated[Path | None, typer.Option("--db")] = None,
 ) -> None:
     """Point a baseline label at a run id."""
@@ -268,9 +266,7 @@ def cmd_baseline_set(
 
 @baseline_app.command("get")
 def cmd_baseline_get(
-    name: Annotated[
-        str, typer.Option("--name", help="Baseline label.")
-    ] = DEFAULT_BASELINE,
+    name: Annotated[str, typer.Option("--name", help="Baseline label.")] = DEFAULT_BASELINE,
     db: Annotated[Path | None, typer.Option("--db")] = None,
 ) -> None:
     """Print the run currently tagged as baseline ``name``."""

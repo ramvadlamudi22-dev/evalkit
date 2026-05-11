@@ -37,15 +37,15 @@ def _write_dataset(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-_PASS_LINE_A = (
+_OK_A = (
     '{"case_id":"a","input":{"messages":[{"role":"user","content":"hello"}]},'
     '"expected":{"text":"hello"}}'
 )
-_PASS_LINE_C = (
+_OK_C = (
     '{"case_id":"c","input":{"messages":[{"role":"user","content":"hello"}]},'
     '"expected":{"text":"hello"}}'
 )
-_FAIL_LINE_B = (
+_BAD_B = (
     '{"case_id":"b","input":{"messages":[{"role":"user","content":"hello"}]},'
     '"expected":{"text":"WRONG"}}'
 )
@@ -76,11 +76,11 @@ async def test_compare_detects_pass_rate_regression(tmp_path: Path) -> None:
     repo = Repo(session_factory_for(engine))
 
     # Baseline: both cases pass.
-    _write_dataset(dataset_path, [_PASS_LINE_A, _PASS_LINE_C])
+    _write_dataset(dataset_path, [_OK_A, _OK_C])
     baseline_id = await _run_and_return_id(repo, suite_path)
 
     # Candidate: one case fails.
-    _write_dataset(dataset_path, [_PASS_LINE_A, _FAIL_LINE_B])
+    _write_dataset(dataset_path, [_OK_A, _BAD_B])
     candidate_id = await _run_and_return_id(repo, suite_path)
     engine.dispose()
 
@@ -104,7 +104,7 @@ async def test_compare_passes_when_pass_rate_holds(tmp_path: Path) -> None:
     ensure_schema(engine)
     repo = Repo(session_factory_for(engine))
 
-    _write_dataset(dataset_path, [_PASS_LINE_A])
+    _write_dataset(dataset_path, [_OK_A])
     a = await _run_and_return_id(repo, suite_path)
     # Same dataset -> same pass rate.
     b = await _run_and_return_id(repo, suite_path)
@@ -121,7 +121,7 @@ async def test_baseline_set_and_get_roundtrip(tmp_path: Path) -> None:
     suite_path = tmp_path / "suite.yaml"
     _write_suite(suite_path, tag="b")
     dataset_path = tmp_path / "data.jsonl"
-    _write_dataset(dataset_path, [_PASS_LINE_A])
+    _write_dataset(dataset_path, [_OK_A])
 
     db_path = tmp_path / "evalkit.db"
     engine = engine_for(db_path)

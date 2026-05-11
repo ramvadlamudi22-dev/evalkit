@@ -26,9 +26,7 @@ class Provider(Protocol):
 
     name: str
 
-    async def complete(
-        self, request: ProviderRequest, *, timeout_s: float
-    ) -> ProviderResponse: ...
+    async def complete(self, request: ProviderRequest, *, timeout_s: float) -> ProviderResponse: ...
 
 
 @runtime_checkable

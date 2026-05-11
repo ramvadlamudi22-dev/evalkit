@@ -26,11 +26,11 @@ evaluators:
   - name: exact_match
 """
 
-_DATA_PASS = (
+_DATA_OK = (
     '{"case_id":"a","input":{"messages":[{"role":"user","content":"hi"}]},'
     '"expected":{"text":"hi"}}\n'
 )
-_DATA_FAIL = (
+_DATA_BAD = (
     '{"case_id":"b","input":{"messages":[{"role":"user","content":"hi"}]},'
     '"expected":{"text":"WRONG"}}\n'
 )
@@ -46,14 +46,14 @@ def _seed(tmp_path: Path, *, data: str) -> tuple[Path, Path]:
 @pytest.mark.integration
 class TestCliRun:
     def test_run_passing_exits_zero_and_prints_summary(self, tmp_path: Path) -> None:
-        suite_path, db = _seed(tmp_path, data=_DATA_PASS)
+        suite_path, db = _seed(tmp_path, data=_DATA_OK)
         result = CliRunner().invoke(app, ["run", str(suite_path), "--db", str(db)])
         assert result.exit_code == 0, result.output
         assert "passed=1" in result.output
         assert "failed=0" in result.output
 
     def test_run_failing_exits_one(self, tmp_path: Path) -> None:
-        suite_path, db = _seed(tmp_path, data=_DATA_FAIL)
+        suite_path, db = _seed(tmp_path, data=_DATA_BAD)
         result = CliRunner().invoke(app, ["run", str(suite_path), "--db", str(db)])
         assert result.exit_code == 1, result.output
         assert "failed=1" in result.output
@@ -73,7 +73,7 @@ class TestCliListAndShow:
         assert result.exit_code == 64
 
     def test_show_existing_run(self, tmp_path: Path) -> None:
-        suite_path, db = _seed(tmp_path, data=_DATA_PASS)
+        suite_path, db = _seed(tmp_path, data=_DATA_OK)
         CliRunner().invoke(app, ["run", str(suite_path), "--db", str(db)])
         listing = CliRunner().invoke(app, ["list", "runs", "--db", str(db)])
         run_id = listing.output.split()[0]
@@ -108,16 +108,12 @@ class TestCliInit:
 class TestCliBaselineErrors:
     def test_set_unknown_run_exits_64(self, tmp_path: Path) -> None:
         db = tmp_path / "evalkit.db"
-        result = CliRunner().invoke(
-            app, ["baseline", "set", "01NOPENOPENOPE", "--db", str(db)]
-        )
+        result = CliRunner().invoke(app, ["baseline", "set", "01NOPENOPENOPE", "--db", str(db)])
         assert result.exit_code == 64
 
     def test_compare_unknown_run_exits_64(self, tmp_path: Path) -> None:
         db = tmp_path / "evalkit.db"
-        result = CliRunner().invoke(
-            app, ["compare", "01A", "01B", "--db", str(db)]
-        )
+        result = CliRunner().invoke(app, ["compare", "01A", "01B", "--db", str(db)])
         assert result.exit_code == 64
 
 

@@ -31,6 +31,7 @@ from evalkit.core.models import (
 )
 from evalkit.errors import StorageError
 from evalkit.storage.db import session_scope
+from evalkit.storage.models import Baseline as BaselineRow
 from evalkit.storage.models import (
     Case as CaseRow,
 )
@@ -46,7 +47,6 @@ from evalkit.storage.models import (
 from evalkit.storage.models import (
     Suite as SuiteRow,
 )
-from evalkit.storage.models import Baseline as BaselineRow
 
 
 class Repo:
@@ -365,7 +365,7 @@ def _best_effort_git_sha() -> str | None:
     if env_sha:
         return env_sha
     try:
-        result = subprocess.run(  # noqa: S603 - argv is a literal list
+        result = subprocess.run(
             ["git", "rev-parse", "HEAD"],  # noqa: S607 - we trust $PATH for git
             capture_output=True,
             text=True,
