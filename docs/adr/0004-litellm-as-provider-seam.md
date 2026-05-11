@@ -68,6 +68,13 @@ get the post-retry result and never have to know the retry policy exists.
   retry budget on an unrecognised condition).
 - We don't get OTel spans out of the box. The seam emits structured `provider.call` events
   via structlog; an OTel exporter plugs into the same call site in Phase 5.
+- **LiteLLM proxy-server CVEs are not exploitable in our usage** (we import LiteLLM as a
+  library; we do not run `litellm-proxy`). Four such CVEs are documented in
+  `.github/workflows/ci.yml`'s pip-audit step (`CVE-2026-42203`, `CVE-2026-42208`,
+  `CVE-2026-42271`, `CVE-2026-40217`). The fix versions (1.83.7 / 1.83.10) exact-pin
+  `click==8.1.8`, which conflicts with our Typer 0.25 constraint that requires
+  `click>=8.2.1`. We revisit when LiteLLM relaxes the click pin upstream or when our
+  Typer constraint changes.
 
 ## Alternatives considered
 

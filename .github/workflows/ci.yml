@@ -89,7 +89,23 @@ jobs:
         # of evalkit on PyPI (it isn't published from CI). We do not pass `--strict` because
         # pip-audit treats a skipped editable install as a strict-mode failure; the audit
         # still fails the job on any actual CVE.
-        run: uv run pip-audit --skip-editable
+        #
+        # Ignored CVEs (LiteLLM proxy-server only; we use LiteLLM as a library
+        # and never run `litellm-proxy`):
+        #   CVE-2026-42203  proxy /prompts/test SSTI
+        #   CVE-2026-42208  proxy combined-view token SQL injection
+        #   CVE-2026-42271  proxy /v1/messages auth bypass
+        #   CVE-2026-40217  proxy management routes
+        # Newer LiteLLM (>=1.83.10) pins click==8.1.8 exactly, which conflicts
+        # with our Typer 0.25 constraint (Typer 0.25 needs click>=8.2.1). We
+        # revisit when LiteLLM relaxes the click pin or our Typer constraint
+        # changes; tracked in ADR-0004.
+        run: |
+          uv run pip-audit --skip-editable \
+            --ignore-vuln CVE-2026-42203 \
+            --ignore-vuln CVE-2026-42208 \
+            --ignore-vuln CVE-2026-42271 \
+            --ignore-vuln CVE-2026-40217
 
   docker:
     name: docker (build + smoke)
