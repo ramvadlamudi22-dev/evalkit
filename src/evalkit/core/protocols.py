@@ -1,12 +1,11 @@
 """Provider and Evaluator protocols.
 
-The protocols are deliberately small. Phase 1 implementations (mock provider,
-exact_match / contains evaluators) satisfy them trivially.
+The protocols are deliberately small. Phase 1 introduced sync versions;
+Phase 2 promotes :class:`Provider.complete` to async so concurrent runs and
+real providers (LiteLLM et al.) can yield while waiting on the network.
 
-We use synchronous interfaces for now. The planning doc anticipates async
-providers, but Phase 1 only ships a deterministic mock that has no I/O, so
-forcing async would be premature complexity. Phase 2 (real providers) is the
-right time to introduce async at this seam.
+Evaluators stay sync: Phase 1-3 evaluators are pure CPU. If/when we add
+``llm_judge`` we'll either run it in a thread or expose an async surface.
 """
 
 from __future__ import annotations
@@ -27,7 +26,9 @@ class Provider(Protocol):
 
     name: str
 
-    def complete(self, request: ProviderRequest, *, timeout_s: float) -> ProviderResponse: ...
+    async def complete(
+        self, request: ProviderRequest, *, timeout_s: float
+    ) -> ProviderResponse: ...
 
 
 @runtime_checkable
